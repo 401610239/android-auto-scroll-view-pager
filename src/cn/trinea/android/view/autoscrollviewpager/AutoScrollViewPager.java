@@ -5,6 +5,7 @@ import java.lang.reflect.Field;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
+import android.support.v4.view.MotionEventCompat;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.util.AttributeSet;
@@ -56,6 +57,10 @@ public class AutoScrollViewPager extends ViewPager {
     private int                    slideBorderMode             = SLIDE_BORDER_MODE_NONE;
     /** whether animating when auto scroll at the last or first item **/
     private boolean                isBorderAnimation           = true;
+    /** scroll factor for auto scroll animation, default is 1.0 **/
+    private double                 autoScrollFactor            = 1.0;
+    /** scroll factor for swipe scroll animation, default is 1.0 **/
+    private double                 swipeScrollFactor           = 1.0;
 
     private Handler                handler;
     private boolean                isAutoScroll                = false;
@@ -85,7 +90,7 @@ public class AutoScrollViewPager extends ViewPager {
      */
     public void startAutoScroll() {
         isAutoScroll = true;
-        sendScrollMessage(interval);
+        sendScrollMessage((long) (interval + scroller.getDuration()/ autoScrollFactor * swipeScrollFactor));
     }
 
     /**
@@ -107,10 +112,17 @@ public class AutoScrollViewPager extends ViewPager {
     }
 
     /**
-     * set the factor by which the duration of sliding animation will change
+     * set the factor by which the duration of sliding animation will change while swiping
      */
-    public void setScrollDurationFactor(double scrollFactor) {
-        scroller.setScrollDurationFactor(scrollFactor);
+    public void setSwipeScrollDurationFactor(double scrollFactor) {
+        swipeScrollFactor = scrollFactor;
+    }
+
+    /**
+     * set the factor by which the duration of sliding animation will change while auto scrolling
+     */
+    public void setAutoScrollDurationFactor(double scrollFactor) {
+        autoScrollFactor = scrollFactor;
     }
 
     private void sendScrollMessage(long delayTimeInMills) {
@@ -169,9 +181,11 @@ public class AutoScrollViewPager extends ViewPager {
      * </ul>
      */
     @Override
-    public boolean onTouchEvent(MotionEvent ev) {
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        int action = MotionEventCompat.getActionMasked(ev);
+
         if (stopScrollWhenTouch) {
-            if (ev.getAction() == MotionEvent.ACTION_DOWN && isAutoScroll) {
+            if ((action == MotionEvent.ACTION_DOWN) && isAutoScroll) {
                 isStopByTouch = true;
                 stopAutoScroll();
             } else if (ev.getAction() == MotionEvent.ACTION_UP && isStopByTouch) {
@@ -202,11 +216,12 @@ public class AutoScrollViewPager extends ViewPager {
                     }
                     getParent().requestDisallowInterceptTouchEvent(true);
                 }
-                return super.onTouchEvent(ev);
+                return super.dispatchTouchEvent(ev);
             }
         }
         getParent().requestDisallowInterceptTouchEvent(true);
-        return super.onTouchEvent(ev);
+
+        return super.dispatchTouchEvent(ev);
     }
 
     private class MyHandler extends Handler {
@@ -217,8 +232,10 @@ public class AutoScrollViewPager extends ViewPager {
 
             switch (msg.what) {
                 case SCROLL_WHAT:
+                    scroller.setScrollDurationFactor(autoScrollFactor);
                     scrollOnce();
-                    sendScrollMessage(interval);
+                    scroller.setScrollDurationFactor(swipeScrollFactor);
+                    sendScrollMessage(interval + scroller.getDuration());
                 default:
                     break;
             }
